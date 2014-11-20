@@ -11,17 +11,20 @@ Gem::Specification.new do |s|
   s.homepage    = "http://github.com/calabash"
   s.summary     = %q{Client for calabash-android for automated functional testing on Android}
   s.description = %q{calabash-android drives tests for native  and hybrid Android apps. }
-  s.files         = `git ls-files`.split("\n") + Dir["test-server/calabash-js/src/*.js"] + ["lib/calabash-android/lib/TestServer.apk"]
+  s.files         = `git ls-files | grep -v "test-server/instrumentation-backend"`.split("\n") + Dir["test-server/calabash-js/src/*.js"] + ["lib/calabash-android/lib/TestServer.apk"]
   s.executables   = "calabash-android"
   s.require_paths = ["lib"]
 
-  s.add_dependency( "cucumber" )
-  s.add_dependency( "json" )
+  s.add_dependency( "cucumber", '~> 1.3.17' )
+  s.add_dependency( "json", '~> 1.8' )
   s.add_dependency( "retriable", "~> 1.3.3.1" )
-  s.add_dependency( "slowhandcuke" )
-  s.add_dependency( "rubyzip", "~> 0.9.9" )
-  s.add_dependency( "awesome_print" )
+  s.add_dependency( "slowhandcuke", '~> 0.0.3')
+  s.add_dependency( "rubyzip", "~> 1.1" )
+  s.add_dependency( "awesome_print", '~> 1.2.0')
   s.add_dependency( 'httpclient', '~> 2.3.2')
-  s.add_dependency( 'xamarin-test-cloud', '>= 0.9.23')
   s.add_dependency( 'escape', '~> 0.0.4')
+
+  s.add_development_dependency( 'rake', '~> 10.3' )
+  s.add_development_dependency( 'yard', '~> 0.8' )
+  s.add_development_dependency( 'redcarpet', '~> 3.1' )
 end

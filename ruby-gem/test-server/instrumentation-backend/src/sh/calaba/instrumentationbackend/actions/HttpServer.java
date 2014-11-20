@@ -6,9 +6,15 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.InterruptedException;
+import java.lang.Override;
+import java.lang.Runnable;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Properties;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -18,13 +24,26 @@ import sh.calaba.instrumentationbackend.Command;
 import sh.calaba.instrumentationbackend.FranklyResult;
 import sh.calaba.instrumentationbackend.InstrumentationBackend;
 import sh.calaba.instrumentationbackend.Result;
+import sh.calaba.instrumentationbackend.actions.webview.CalabashChromeClient;
+import sh.calaba.instrumentationbackend.actions.webview.ExecuteAsyncJavascript;
+import sh.calaba.instrumentationbackend.actions.webview.ExecuteJavascript;
 import sh.calaba.instrumentationbackend.json.JSONUtils;
+import sh.calaba.instrumentationbackend.query.InvocationOperation;
+import sh.calaba.instrumentationbackend.query.Operation;
 import sh.calaba.instrumentationbackend.query.Query;
 import sh.calaba.instrumentationbackend.query.QueryResult;
 import sh.calaba.org.codehaus.jackson.map.ObjectMapper;
+
+import android.app.Activity;
+import android.app.Application;
+import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.util.Log;
 import android.view.View;
+import android.view.animation.Animation;
+import android.view.animation.AlphaAnimation;
+import android.webkit.WebView;
 
 public class HttpServer extends NanoHTTPD {
 	private static final String TAG = "InstrumentationBackend";
@@ -70,7 +89,7 @@ public class HttpServer extends NanoHTTPD {
 			Properties params, Properties files) {
 		System.out.println("URI: " + uri);
 		System.out.println("params: " + params);
-		
+
 		if (uri.endsWith("/ping")) {
 			return new NanoHTTPD.Response(HTTP_OK, MIME_HTML, "pong");
 
@@ -116,7 +135,73 @@ public class HttpServer extends NanoHTTPD {
                 errorResult = FranklyResult.fromThrowable(e);
             }
             return new NanoHTTPD.Response(HTTP_INTERNALERROR, "application/json;charset=utf-8", errorResult.asJson());
-		} 
+		}
+        else if (uri.endsWith("/broadcast-intent")) {
+            try {
+                String json = params.getProperty("json");
+                ObjectMapper mapper = new ObjectMapper();
+                Map data = mapper.readValue(json, Map.class);
+
+                Intent intent = new Intent();
+
+                if (data.containsKey("action")) {
+                    intent.setAction((String) data.get("action"));
+                }
+
+                Activity activity = InstrumentationBackend.solo.getCurrentActivity();
+
+                Log.d(TAG, "Broadcasting intent " + intent);
+                activity.sendBroadcast(intent);
+
+                return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8", "");
+            } catch (Exception e) {
+                e.printStackTrace();
+                Exception ex = new Exception("Could not invoke method", e);
+
+                return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8", FranklyResult.fromThrowable(ex).asJson());
+            }
+        }
+        else if (uri.endsWith("/backdoor")) {
+            try {
+                String json = params.getProperty("json");
+                ObjectMapper mapper = new ObjectMapper();
+                Map backdoorMethod = mapper.readValue(json, Map.class);
+
+                String methodName = (String) backdoorMethod.get("method_name");
+                List arguments = (List) backdoorMethod.get("arguments");
+                Operation operation = new InvocationOperation(methodName, arguments);
+
+                Application application = InstrumentationBackend.solo.getCurrentActivity().getApplication();
+                Object invocationResult;
+
+                invocationResult = operation.apply(application);
+
+                if (invocationResult instanceof Map && ((Map) invocationResult).containsKey("error")) {
+                    Context context = getRootView().getContext();
+                    invocationResult = operation.apply(context);
+                }
+
+                Map<String, String> result = new HashMap<String, String>();
+
+                if (invocationResult instanceof Map && ((Map) invocationResult).containsKey("error")) {
+                    result.put("outcome", "ERROR");
+                    result.put("result", (String) ((Map) invocationResult).get("error"));
+                    result.put("details", invocationResult.toString());
+                } else {
+                    result.put("outcome", "SUCCESS");
+                    result.put("result", String.valueOf(invocationResult));
+                }
+
+                ObjectMapper resultMapper = new ObjectMapper();
+
+                return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8", resultMapper.writeValueAsString(result));
+            } catch (Exception e) {
+                e.printStackTrace();
+                Exception ex = new Exception("Could not invoke method", e);
+
+                return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8", FranklyResult.fromThrowable(ex).asJson());
+            }
+        }
 		else if (uri.endsWith("/map")) {
 			FranklyResult errorResult = null;
 			try {
@@ -127,17 +212,83 @@ public class HttpServer extends NanoHTTPD {
 				String uiQuery = (String) command.get("query");
 				uiQuery = uiQuery.trim();
 				Map op = (Map) command.get("operation");
-				@SuppressWarnings("unused") //TODO: support other methods, e.g., flash
-				String methodName = (String) op.get("method_name");
-				List arguments = (List) op.get("arguments");
-				
-				//For now we only support query
-				
-				
-				QueryResult queryResult = new Query(uiQuery,arguments).executeQuery();
+                String methodName = (String) op.get("method_name");
+                List arguments = (List) op.get("arguments");
 
-				return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8", 
-						FranklyResult.successResult(queryResult).asJson());
+                if (methodName.equals("flash")) {
+                    QueryResult queryResult = new Query(uiQuery, java.util.Collections.emptyList()).executeQuery();
+                    List<View> views = queryResult.getResult();
+
+                    if (views.isEmpty()) {
+                        return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8",
+                                FranklyResult.failedResult("Could not find view to flash", "").asJson());
+                    }
+
+                    final Object firstItem = views.get(0);
+
+                    if (!(firstItem instanceof View)) {
+                        return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8",
+                                FranklyResult.failedResult("Only views can be flashed", "").asJson());
+                    }
+
+                    for (final View view : views) {
+                        InstrumentationBackend.solo.runOnMainSync(new Runnable() {
+                            @Override
+                            public void run() {
+                                Animation animation = new AlphaAnimation(1, 0);
+                                animation.setRepeatMode(Animation.REVERSE);
+                                animation.setDuration(200);
+                                animation.setRepeatCount(5);
+                                view.startAnimation(animation);
+                            }
+                        });
+
+                        try {
+                            Thread.sleep(1200);
+                        } catch (InterruptedException e) {
+                            return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8",
+                                    FranklyResult.failedResult("Interrupted while flashing", "").asJson());
+                        }
+                    }
+
+                    return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8",
+                            FranklyResult.successResult(queryResult).asJson());
+                }
+                else if (methodName.equals("execute-javascript")) {
+                    String javascript = (String) command.get("javascript");
+                    List queryResult = new Query(uiQuery).executeQuery().getResult();
+                    List<CalabashChromeClient.WebFuture> webFutures = new ArrayList<CalabashChromeClient.WebFuture>();
+
+                    List<String> webFutureResults = new ArrayList<String>(webFutures.size());
+                    boolean success = true;
+
+                    for (Object object : queryResult) {
+                        String result;
+                        if(object instanceof WebView) {
+                            result = ExecuteJavascript.evaluateJavascript((WebView) object, javascript);
+
+                            if (result.startsWith("Exception:")) {
+                                success = false;
+                            }
+                        } else {
+                            result = "Error: will only call javascript on WebView, not " + object.getClass().getSimpleName();
+                            success = false;
+                        }
+                        webFutureResults.add(result);
+                    }
+
+                    QueryResult jsQueryResults = new QueryResult(webFutureResults);
+                    FranklyResult result = new FranklyResult(success, jsQueryResults, "", "");
+
+                    return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8",
+                            result.asJson());
+                }
+               else {
+                    QueryResult queryResult = new Query(uiQuery,arguments).executeQuery();
+
+                    return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8",
+                            FranklyResult.successResult(queryResult).asJson());
+                }
 			} catch (Exception e ) {
 				e.printStackTrace();
                 errorResult = FranklyResult.fromThrowable(e);
@@ -146,7 +297,26 @@ public class HttpServer extends NanoHTTPD {
 		} else if (uri.endsWith("/query")) {
 			return new Response(HTTP_BADREQUEST, MIME_PLAINTEXT,
 					"/query endpoint is discontinued - use /map with operation query");
-		} else if (uri.endsWith("/kill")) {
+        } else if (uri.endsWith("/gesture")) {
+            FranklyResult errorResult;
+
+            try {
+                String json = params.getProperty("json");
+                ObjectMapper mapper = new ObjectMapper();
+                Map gesture = mapper.readValue(json, Map.class);
+
+                (new MultiTouchGesture(gesture)).perform();
+
+                return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8",
+                        FranklyResult.successResult(new QueryResult(Collections.emptyList())).asJson());
+
+            } catch (Exception e ) {
+                e.printStackTrace();
+                errorResult = FranklyResult.fromThrowable(e);
+            }
+
+            return new NanoHTTPD.Response(HTTP_OK, "application/json;charset=utf-8", errorResult.asJson());
+        } else if (uri.endsWith("/kill")) {
 			lock.lock();
 			try {
 				running = false;
