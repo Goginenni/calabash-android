@@ -17,6 +17,7 @@ import java.util.concurrent.TimeoutException;
 import android.graphics.Bitmap;
 import android.os.Looper;
 import sh.calaba.instrumentationbackend.InstrumentationBackend;
+import sh.calaba.instrumentationbackend.query.WebContainer;
 import sh.calaba.instrumentationbackend.query.ast.UIQueryUtils;
 import sh.calaba.org.codehaus.jackson.map.ObjectMapper;
 import sh.calaba.org.codehaus.jackson.type.TypeReference;
@@ -41,7 +42,7 @@ public class CalabashChromeClient extends WebChromeClient {
 
 	public CalabashChromeClient(final WebView webView) {
 		this.webView = webView;
-		this.scriptFuture = new WebFuture(webView);
+		this.scriptFuture = new WebFuture(new WebContainer(webView));
 		if (Build.VERSION.SDK_INT < 16) { // jelly bean
 			try {
 				Method methodGetConfiguration = webView.getClass().getMethod(
@@ -85,7 +86,7 @@ public class CalabashChromeClient extends WebChromeClient {
             @Override
             public void run() {
                 Class<?> webViewClass = webView.getClass();
-                boolean isCordovaWebView = (webViewClass.getName().equals("org.apache.cordova.CordovaWebView"));
+                boolean isCordovaWebView = superClassEquals(webViewClass, "org.apache.cordova.CordovaWebView");
 
                 // Cordova web view changed its implementation of setWebChromeClient.
                 //   it will now try to cast the given WebChromeClient to a CordovaChromeClient,
@@ -104,6 +105,16 @@ public class CalabashChromeClient extends WebChromeClient {
 
         UIQueryUtils.runOnViewThread(webView, setWebChromeClientRunnable);
 	}
+
+    private boolean superClassEquals(Class clazz, String className) {
+        do {
+            if (clazz.getCanonicalName().equals(className)) {
+                return true;
+            }
+        } while((clazz = clazz.getSuperclass()) != Object.class);
+
+        return false;
+    }
 
     private void webViewSetWebChromeClient(WebChromeClient webChromeClient) throws NoSuchFieldException, IllegalAccessException,
             NoSuchMethodException, InvocationTargetException {
@@ -144,9 +155,9 @@ public class CalabashChromeClient extends WebChromeClient {
 			String defaultValue, JsPromptResult r) {
 		if (message != null && message.startsWith("calabash:")) {
 			r.confirm("CALABASH_ACK");
-			System.out.println("onJsPrompt: " + message);
-			String jsonResponse = message.replaceFirst("calabash:", "");
-			scriptFuture.setResult(jsonResponse);			
+			System.out.println("onJsPrompt: " + message.subSequence(0, Math.min(message.length(), 100)));
+			String response = message.replaceFirst("calabash:", "");
+			scriptFuture.setResult(response);
 			return true;
 		} else {
 			if (mWebChromeClient == null) {
@@ -189,166 +200,224 @@ public class CalabashChromeClient extends WebChromeClient {
 		return scriptFuture;
 	}
 
-    public void evaluateCalabashScript(String script) {
-        webView.evaluateJavascript(script, new ValueCallback<String>() {
-            public void onReceiveValue(String rawResponseJSON) {
-                String jsonResponse = null;
-
-                try {
-                    jsonResponse = new ObjectMapper().readValue(
-                            rawResponseJSON, new TypeReference<String>() {
-                    });
-                } catch (IOException e) {
-                    throw new RuntimeException("Incorrect JSON format returned from javascript: " + rawResponseJSON, e);
-                }
-
-                scriptFuture.setResult(jsonResponse);
-            }
-        });
-    }
-
     /* Overwrite all methods to delegate to previous webChromeClient */
 
     @Override
     public void onProgressChanged(WebView view, int newProgress) {
-        mWebChromeClient.onProgressChanged(view, newProgress);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onProgressChanged(view, newProgress);
+        }
     }
 
     @Override
     public void onReceivedTitle(WebView view, String title) {
-        mWebChromeClient.onReceivedTitle(view, title);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onReceivedTitle(view, title);
+        }
     }
 
     @Override
     public void onReceivedIcon(WebView view, Bitmap icon) {
-        mWebChromeClient.onReceivedIcon(view, icon);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onReceivedIcon(view, icon);
+        }
     }
 
     @Override
     public void onReceivedTouchIconUrl(WebView view, String url, boolean precomposed) {
-        mWebChromeClient.onReceivedTouchIconUrl(view, url, precomposed);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onReceivedTouchIconUrl(view, url, precomposed);
+        }
     }
 
     @Override
     public void onShowCustomView(View view, CustomViewCallback callback) {
-        mWebChromeClient.onShowCustomView(view, callback);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onShowCustomView(view, callback);
+        }
     }
 
     @Override
     public void onShowCustomView(View view, int requestedOrientation, CustomViewCallback callback) {
-        mWebChromeClient.onShowCustomView(view, requestedOrientation, callback);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onShowCustomView(view, requestedOrientation, callback);
+        }
     }
 
     @Override
     public void onHideCustomView() {
-        mWebChromeClient.onHideCustomView();
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onHideCustomView();
+        }
     }
 
     @Override
     public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
-        return mWebChromeClient.onCreateWindow(view, isDialog, isUserGesture, resultMsg);
+        if (mWebChromeClient != null) {
+            return mWebChromeClient.onCreateWindow(view, isDialog, isUserGesture, resultMsg);
+        }
+
+        return false;
     }
 
     @Override
     public void onRequestFocus(WebView view) {
-        mWebChromeClient.onRequestFocus(view);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onRequestFocus(view);
+        }
     }
 
     @Override
     public void onCloseWindow(WebView window) {
-        mWebChromeClient.onCloseWindow(window);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onCloseWindow(window);
+        }
     }
 
     @Override
     public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
-        return mWebChromeClient.onJsAlert(view, url, message, result);
+        if (mWebChromeClient != null) {
+            return mWebChromeClient.onJsAlert(view, url, message, result);
+        }
+
+        return false;
     }
 
     @Override
     public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
-        return mWebChromeClient.onJsConfirm(view, url, message, result);
+        if (mWebChromeClient != null) {
+            return mWebChromeClient.onJsConfirm(view, url, message, result);
+        }
+
+        return false;
     }
 
     @Override
     public boolean onJsBeforeUnload(WebView view, String url, String message, JsResult result) {
-        return mWebChromeClient.onJsBeforeUnload(view, url, message, result);
+        if (mWebChromeClient != null) {
+            return mWebChromeClient.onJsBeforeUnload(view, url, message, result);
+        }
+
+        return false;
     }
 
     @Override
     public void onExceededDatabaseQuota(String url, String databaseIdentifier, long quota, long estimatedDatabaseSize, long totalQuota, WebStorage.QuotaUpdater quotaUpdater) {
-        mWebChromeClient.onExceededDatabaseQuota(url, databaseIdentifier, quota, estimatedDatabaseSize, totalQuota, quotaUpdater);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onExceededDatabaseQuota(url, databaseIdentifier, quota, estimatedDatabaseSize, totalQuota, quotaUpdater);
+        }
     }
 
     @Override
     public void onReachedMaxAppCacheSize(long requiredStorage, long quota, WebStorage.QuotaUpdater quotaUpdater) {
-        mWebChromeClient.onReachedMaxAppCacheSize(requiredStorage, quota, quotaUpdater);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onReachedMaxAppCacheSize(requiredStorage, quota, quotaUpdater);
+        }
     }
 
     @Override
     public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-        mWebChromeClient.onGeolocationPermissionsShowPrompt(origin, callback);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onGeolocationPermissionsShowPrompt(origin, callback);
+        }
     }
 
     @Override
     public void onGeolocationPermissionsHidePrompt() {
-        mWebChromeClient.onGeolocationPermissionsHidePrompt();
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onGeolocationPermissionsHidePrompt();
+        }
     }
 
     @Override
     public boolean onJsTimeout() {
-        return mWebChromeClient.onJsTimeout();
+        if (mWebChromeClient != null) {
+            return mWebChromeClient.onJsTimeout();
+        }
+
+        return false;
     }
 
     @Override
     public void onConsoleMessage(String message, int lineNumber, String sourceID) {
-        mWebChromeClient.onConsoleMessage(message, lineNumber, sourceID);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.onConsoleMessage(message, lineNumber, sourceID);
+        }
     }
 
     @Override
     public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
-        return mWebChromeClient.onConsoleMessage(consoleMessage);
+        if (mWebChromeClient != null) {
+            return mWebChromeClient.onConsoleMessage(consoleMessage);
+        }
+
+        return false;
     }
 
     @Override
     public Bitmap getDefaultVideoPoster() {
-        return mWebChromeClient.getDefaultVideoPoster();
+        if (mWebChromeClient != null) {
+            return mWebChromeClient.getDefaultVideoPoster();
+        }
+
+        return null;
     }
 
     @Override
     public View getVideoLoadingProgressView() {
-        return mWebChromeClient.getVideoLoadingProgressView();
+        if (mWebChromeClient != null) {
+            return mWebChromeClient.getVideoLoadingProgressView();
+        }
+
+        return null;
     }
 
     @Override
     public void getVisitedHistory(ValueCallback<String[]> callback) {
-        mWebChromeClient.getVisitedHistory(callback);
+        if (mWebChromeClient != null) {
+            mWebChromeClient.getVisitedHistory(callback);
+        }
     }
 
     @SuppressWarnings("rawtypes")
-	public static class WebFuture implements Future {
+	public static class WebFuture implements Future<Map> {
+        public static final String JS_ERROR_IDENTIFIER = "CalabashJSError:";
 		private final ConditionVariable eventHandled;
 		private volatile boolean complete;
+        private Throwable throwable;
 		private String result;
-		private final WebView webView;
+		private final WebContainer webContainer;
 
-		public WebView getWebView() {
-			return webView;
-		}
+		public WebContainer getWebContainer() {
+            return webContainer;
+        }
 
 		public void complete() {
 			this.complete = true;
 			this.eventHandled.open();
 		}
 
-		public WebFuture(WebView webView) {
-			this.webView = webView;
-			eventHandled = new ConditionVariable();
-			result = null;
-		}
+		public WebFuture(WebContainer webContainer) {
+            this.webContainer = webContainer;
+            eventHandled = new ConditionVariable();
+            result = null;
+            throwable = null;
+        }
+
+        public synchronized void completeExceptionally(Throwable ex) {
+            throwable = ex;
+            complete();
+        }
 
 		public synchronized void setResult(String result) {
-			this.result = result;
-			this.complete();
+            if (result != null && result.startsWith(JS_ERROR_IDENTIFIER)) {
+                String text = result.substring(JS_ERROR_IDENTIFIER.length());
+                this.result = text;
+                completeExceptionally(new ExecutionException(text, null));
+            } else {
+                this.result = result;
+                complete();
+            }
 		}
 
 		public synchronized String getResult() {
@@ -360,16 +429,30 @@ public class CalabashChromeClient extends WebChromeClient {
 		}
 
 		@Override
-		public Object get() throws InterruptedException, ExecutionException {
+		public Map get() throws InterruptedException, ExecutionException {
 			eventHandled.block();
+
+            if(throwable != null) {
+                throw new ExecutionException(throwable);
+            }
+
 			return asMap();
 		}
 
 		@Override
-		public Object get(long timeout, TimeUnit unit)
+		public Map get(long timeout, TimeUnit unit)
 				throws InterruptedException, ExecutionException,
 				TimeoutException {
-			eventHandled.block(unit.convert(timeout, TimeUnit.MILLISECONDS));
+			eventHandled.block(unit.toMillis(timeout));
+
+            if(throwable != null) {
+                throw new ExecutionException(throwable);
+            }
+
+            if(!complete) {
+                throw new TimeoutException("Timeout while waiting for value");
+            }
+
 			return asMap();
 		}
 
@@ -396,7 +479,7 @@ public class CalabashChromeClient extends WebChromeClient {
 		@SuppressWarnings("unchecked")
 		public Map asMap() {			
 			HashMap m = new HashMap();
-			m.put("webView", webView);
+			m.put("calabashWebContainer", webContainer);
 			m.put("result",getResult());			
 			return m;
 		}
