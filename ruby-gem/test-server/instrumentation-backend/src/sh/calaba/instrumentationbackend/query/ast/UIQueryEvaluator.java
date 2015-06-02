@@ -1,52 +1,41 @@
 package sh.calaba.instrumentationbackend.query.ast;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import android.view.View;
 import sh.calaba.instrumentationbackend.query.Operation;
+import sh.calaba.instrumentationbackend.query.QueryResult;
 import sh.calaba.instrumentationbackend.query.UIQueryResultVoid;
 import sh.calaba.instrumentationbackend.query.ViewMapper;
 
 public class UIQueryEvaluator {
 	
 	@SuppressWarnings({ "rawtypes" })
-	public static List evaluateQueryWithOptions(List<UIQueryAST> query, List inputViews,
-			List<Operation> operations) {
-		
-        long before = System.currentTimeMillis();
-        
+	public static QueryResult evaluateQueryWithOptions(List<UIQueryAST> query, List<View> inputViews, List<Operation> operations) {
         List views = evaluateQueryForPath(query, inputViews);
-        
-        long after = System.currentTimeMillis();              
-        String action = "EvaluateQuery";                               
-        System.out.println(action+ " took: "+ (after-before) + "ms");
-        
-        before = System.currentTimeMillis();
-        
         List result = applyOperations(views, operations);
-        
-        after = System.currentTimeMillis();              
-        action = "ApplyOperations";                               
-        System.out.println(action+ " took: "+ (after-before) + "ms");
 
-        before = System.currentTimeMillis();
-        
-		List finalResult = mapViews(result);
-        
-		after = System.currentTimeMillis();              
-        action = "MapViews";                               
-        return finalResult;         	
+        // This is a bit of a hack because of the way we pass around values in
+        // the result hashmap itself. We will improve if we add a query result type that has
+        // metadata in it.
+        List modifiedResults = new ArrayList(result.size());
+
+        for (Object object : result) {
+            if (object instanceof Map) {
+                Map map = new HashMap((Map) object);
+                map.remove("calabashWebContainer");
+                modifiedResults.add(map);
+            } else {
+                modifiedResults.add(object);
+            }
+        }
+
+        return new QueryResult(modifiedResults);
 	}
 
-
-	@SuppressWarnings({ "unchecked", "rawtypes" })
-	public static List mapViews(List result) {		
-		List finalResult = new ArrayList(result.size());
-		for (Object o : result) {
-			finalResult.add(ViewMapper.mapView(o));
-		}
-		return finalResult;
-	}
 
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
@@ -70,7 +59,7 @@ public class UIQueryEvaluator {
 
 	@SuppressWarnings("rawtypes")
 	private static List evaluateQueryForPath(List<UIQueryAST> queryPath,
-			List inputViews) {
+			List<View> inputViews) {
 
 		List currentResult = inputViews;
 		UIQueryDirection currentDirection = UIQueryDirection.DESCENDANT;

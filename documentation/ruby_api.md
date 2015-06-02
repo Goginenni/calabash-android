@@ -19,9 +19,6 @@ Will reinstall both the test server and the AUT to be sure the newest versions a
 ### `query(uiquery, *args)`
 Query returns an [array](http://www.ruby-doc.org/core-1.9.3/Array.html) of its results. The query function gives powerful query capability from your test code. You can find views and other application objects, and make assertions about them or extract data from them.
 
-The syntax for queries is really important, and described in a separate document: TODO: Query Syntax.
-(Until the documention for query gets written the best reference is [this blog post](http://blog.lesspainful.com/2012/12/18/Android-Query/))
-
 Calabash Android tries to return results that carry useable information by default. For view objects this includes coordinates, class and contentdescription:
 
     irb(main):002:0> query("button index:1")
@@ -118,14 +115,26 @@ A Ruby block always returns the value of its last expression (`res.first == true
 
 *Notes:* Waiting for a condition to occur is superior to using the `sleep` function. With `sleep` you end up either specifying too long waits which slows the test down or you become sensitive to timing issues. Sometimes you do need sleep (to wait for animations to complete), but try to use waiting as much as possible.
 
-### wait_for_elements_exist(elements_arr, options={})
+### wait_for_element_exists(uiquery, options={})
 
 A high-level waiting function. This captures the common practice of waiting for UI elements, i.e., combining `wait_for` and `element_exists`.
 
-Takes an *array* of queries and waits for all of those queries to return results. Calls `wait_for` supplying `options`.
+Takes a query and waits for it to return a results. Calls `wait_for` supplying `options`.
+
+
+    irb(main):009:0> wait_for_elements_exist( "* marked:'Please sign in'", :timeout => 10)
+
+
+### wait_for_elements_exist(elements_arr, options={})
+
+Like `wait_for_element_exists` but takes an *array* of queries and waits for all of those queries to return results. Calls `wait_for` supplying `options`.
 
 
     irb(main):008:0> wait_for_elements_exist( ["button marked:'Save'", "* marked:'Please sign in'"], :timeout => 2)
+
+### wait_for_element_does_not_exist(uiquery, options={})
+
+Similar to `wait_for_element_exists`, but waits for an element to not exist.
 
 
 ### wait_for_elements_do_not_exist(elements_arr, options={})
@@ -168,7 +177,15 @@ The following are all equivalent
     touch(query("button index:0"))
     touch(query("button").first)
     touch(query("button"))
+    
+# Entering text
+### `keyboard_enter_text(text, options={})`
 
+Enters **text** into the currently focused view.
+
+### `enter_text(uiquery, text, options={})`
+
+Taps the first element returned by **uiquery**, then enters **text** into the view.
 
 # Screenshot
 ### `screenshot(options={:prefix=>nil, :name=>nil})`

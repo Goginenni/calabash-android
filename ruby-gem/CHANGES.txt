@@ -1,3 +1,86 @@
+0.5.9
+      Fix crosswalk queries giving wrong coordinates.
+
+      Fix client rescuing `Exceptions`
+
+      Support signing with DSA certificates
+
+      Support indexes in css/xpath queries.
+
+0.5.8
+      Handle `embed` if Calabash Android was 'included' instead of added
+      to the Cucumber World
+
+      Do depend on ANY retriable version >= 2
+
+      Fixed possible NPE in WebView queries
+
+0.5.7
+      Replaced calls to retriable with Retriable.retriable.
+
+0.5.6
+      Support for Crosswalk.
+
+      Support cordova Web Views of custom class name.
+
+      Don't fail JSON parsing on empty beans.
+
+      Rescue 'awesome print' LoadError in irbrc; don't fail silently.
+
+      Backdoor not finding any method to invoke in activities.
+
+0.5.5
+      Support for the newest versions of Cordova.
+
+      Change press_user_action_button now defaults to enter key (newline) in input fields with multiple lines.
+
+      Properly delegate all callbacks to the origin Web Chrome Client of the WebView being tested.
+
+      Run queries on the UI thread of the views. The query command could hang indefinitely in certain situations before this fix.
+
+0.5.4:
+      This version is only a fix of changes introduced in 0.5.3.
+
+      Fixed usage of old clear_text being invalid. Now calabash only prints a warning and proceeds.
+
+0.5.3:
+      Added methods to clear text in a specified view or the view that has focus.
+
+      Added ability to invoke javascript in webviews specified by a query.
+
+      Improved keystore handling.
+
+      Fixed issue with a gemspec that was too loose (Cucumber beta is not supported).
+
+0.5.2:
+      Added generic multi touch gestures and many predefined gestures.
+
+      Gestures will now wait 5 seconds by default for the specified view to appear.
+
+      Added press_user_action_button method to press the user action button.
+
+      For a full changelog see
+      https://github.com/calabash/calabash-android/tree/master/changelog/0.5.2.md
+0.5.0:
+      Removed many actions. They all have equivalent ruby wrappers/queries.
+      
+      Added new ruby wrappers for scrolling and more complex gestures that would requre an action before.
+      
+      Implemented flash method. It 'flashes' all found elements visually on the device to help the tester locate a view.
+      Its syntax is equivalent to query.
+      
+      Added keyboard_enter_text/enter_text methods.
+      
+      Updated all predefined steps. Their implementation is now more alike their naming.
+      
+      Backoor method to invoke methods in the tested app.
+      
+      Fixed visibility bugs:
+            - Views that were invisible were returned as visible in some cases.
+            - No visibility filtering on webviews.
+      
+      Fixed various small bugs.
+      
 0.3.7:
       Added calabash-android resign command
 

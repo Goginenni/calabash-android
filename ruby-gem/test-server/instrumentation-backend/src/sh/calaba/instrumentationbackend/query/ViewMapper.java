@@ -14,18 +14,20 @@ import android.widget.TextView;
 
 public class ViewMapper {
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public static Object extractDataFromView(View v) {		
-		
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+	public static Object extractDataFromView(View v) {
+
 		Map data = new HashMap();
-		data.put("class", getClassNameForView(v));		
+		data.put("class", getClassNameForView(v));
 		data.put("description", v.toString());
 		data.put("contentDescription", getContentDescriptionForView(v));
 		data.put("enabled", v.isEnabled());
-		
-		data.put("id", getIdForView(v));
 
-		Map rect = getRectForView(v);
+		data.put("id", getIdForView(v));
+		data.put("tag", getTagForView(v));
+		data.put("visible", UIQueryUtils.isVisible(v));
+
+		Map<String,Integer> rect = getRectForView(v);
 
 		data.put("rect", rect);
 
@@ -45,19 +47,20 @@ public class ViewMapper {
 
 	}
 
-	public static Map getRectForView(View v) {
-		Map rect = new HashMap();
+    public static Map<String, Integer> getRectForView(View v) {
+        Map<String,Integer> rect = new HashMap<String,Integer>();
 		int[] location = new int[2];
 		v.getLocationOnScreen(location);
 
 		rect.put("x", location[0]);
 		rect.put("y", location[1]);
-		
-		rect.put("center_x", location[0] + v.getWidth()/2.0);
-		rect.put("center_y", location[1] + v.getHeight()/2.0);
-		
+        
+		rect.put("center_x", (int)(location[0] + v.getWidth()/2.0));
+		rect.put("center_y", (int)(location[1] + v.getHeight()/2.0));
+
 		rect.put("width", v.getWidth());
 		rect.put("height", v.getHeight());
+
 		return rect;
 	}
 
@@ -70,38 +73,50 @@ public class ViewMapper {
 		return v.getClass().getName();
 	}
 
-	public static String getIdForView(View v) {
-		String id = null;
-		try {
-			id = InstrumentationBackend.solo.getCurrentActivity()
-					.getResources().getResourceEntryName(v.getId());
-		} catch (Resources.NotFoundException e) {
-			System.out.println("Resource not found for " + v.getId()
-					+ ". Moving on.");
+    public static String getIdForView(View v) {
+        int id = v.getId();
+        try {
+            if(v.getResources() != null) {
+                return v.getResources().getResourceEntryName(id);
+            } else {
+                return InstrumentationBackend.solo.getCurrentActivity().getResources().getResourceEntryName(id);
+            }
+        } catch (Resources.NotFoundException e) {
+            if(id == -1) {
+                return null;
+            }
+            return "NoResourceEntry-" + Integer.toString(id);
+        }
+    }
+
+
+    public static String getTagForView(View v) {
+		if (v.getTag() instanceof String || v.getTag() instanceof Integer) {
+			return v.getTag().toString();
 		}
-		return id;
+		return null;
 	}
 
-	@SuppressWarnings({ "unchecked", "rawtypes" })
+	@SuppressWarnings({"unchecked", "rawtypes" })
 	public static Object mapView(Object o) {
 		if (o instanceof View) {
 			return extractDataFromView((View) o);
-		} 
-		else if (o instanceof Map) {			
-			Map copy = new HashMap();			
+		}
+		else if (o instanceof Map) {
+			Map copy = new HashMap();
 			for (Object e : ((Map) o).entrySet()) {
 				Map.Entry entry = (Entry) e;
 				Object value = entry.getValue();
 				if (value instanceof View) {
 					copy.put(entry.getKey(), UIQueryUtils.getId((View) value));
-				}				
+				}
 				else {
 					copy.put(entry.getKey(),entry.getValue());
-				}			
+				}
 			}
-			
+
 			return copy;
-		} 
+		}
 		else if (o instanceof CharSequence) {
 			return o.toString();
 		}

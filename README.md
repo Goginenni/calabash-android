@@ -1,26 +1,25 @@
-Calabash-Android
-================
-Calabash-Android lets you run [Cucumber](http://cukes.info) features on your Android device or emulator. A Cucumber feature could look something like this:
+Welcome to Calabash for Android
+===========================
 
-    Feature: Login feature
-      Scenario: As a valid user I can log into my app
-        Given I am a valid user
-        And I enter my username
-        And I enter my password
-        And I press "Login"
-        Then I see "Welcome to coolest app ever"
+Calabash is an automated testing technology for Android and iOS native and hybrid applications.
+This repository contains support for Android, for iOS, see [Calabash Landing Page](http://calaba.sh/).
 
-You can run your Calabash features on multiple devices using [LessPainful.com](https://www.lesspainful.com).
+Calabash is a free open source project, developed and maintained by [Xamarin](http://xamarin.com).
 
-If you have any questions on Calabash-Android, please use the Google group
+While Calabash is completely free, Xamarin provides a number of commercial services centered around Calabash and quality assurance for mobile, namely Xamarin Test Cloud consisting of hosted test-execution environments which let you execute Calabash tests on a large number of Android and iOS devices.
 
-[http://groups.google.com/group/calabash-android](http://groups.google.com/group/calabash-android)
+Please see [xamarin.com/test-cloud](http://xamarin.com/test-cloud).
+
+If you have any questions on Calabash-Android, please use the Google group [http://groups.google.com/group/calabash-android](http://groups.google.com/group/calabash-android)
 
 ### Documentation
 The documention is split into the following sections:
 * [Installation](documentation/installation.md)
 * [Ruby API](documentation/ruby_api.md)
 
+#### Upgrading to Calabash-android 0.5
+
+Calabash-android 0.5 introduced new features and removed a lot of actions. If your test project is dependent on some of the removed actions, you will have to reimplement the actions using ruby wrappers, queries and gestures. [This document describes all changes needed to migrate to calabash-android 0.5](migrating_to_calabash_0.5.md)
 
 Generate a Cucumber skeleton
 ------------------------
@@ -32,6 +31,7 @@ in the current folder like this:
     | |_app_installation_hooks.rb
     | |_app_life_cycle_hooks.rb
     | |_env.rb
+    | |_hooks.rb
     |_step_definitions
     | |_calabash_steps.rb
     |_my_first.feature
@@ -73,7 +73,7 @@ Troubleshooting
 
 If it seems that buttons/text aren't being clicked properly, you need to add the following xml to your AndroidManifest.xml:
 
-```
+```xml
 <uses-sdk android:targetSdkVersion="SDK_VERSION" />
 ```
 

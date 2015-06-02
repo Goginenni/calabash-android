@@ -1,5 +1,7 @@
 package sh.calaba.instrumentationbackend;
 
+import android.os.Looper;
+import android.os.MessageQueue;
 import sh.calaba.instrumentationbackend.actions.Actions;
 import sh.calaba.instrumentationbackend.actions.HttpServer;
 import android.Manifest;
@@ -16,8 +18,13 @@ import android.util.Log;
 import com.jayway.android.robotium.solo.PublicViewFetcher;
 import com.jayway.android.robotium.solo.SoloEnhanced;
 
+import java.lang.reflect.Field;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+
 public class InstrumentationBackend extends ActivityInstrumentationTestCase2<Activity> {
     public static String testPackage;
+    public static String mainActivityName;
     public static Class<? extends Activity> mainActivity;
     public static Bundle extras;
     
@@ -28,20 +35,48 @@ public class InstrumentationBackend extends ActivityInstrumentationTestCase2<Act
     public static PublicViewFetcher viewFetcher;
     public static Actions actions;
 
-    @SuppressWarnings({ "deprecation", "unchecked" })
     public InstrumentationBackend() {
-        super(testPackage, (Class<Activity>) mainActivity);
+        super((Class<Activity>)mainActivity);
+    }
+
+    @Override
+    public Activity getActivity() {
+        if (mainActivity != null) {
+            return super.getActivity();
+        }
+
+        try {
+            setMainActivity(Class.forName(mainActivityName).asSubclass(Activity.class));
+            return super.getActivity();
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void setMainActivity(Class<? extends Activity> mainActivity) {
+        try {
+            Field mActivityClass = ActivityInstrumentationTestCase2.class.getDeclaredField("mActivityClass");
+            mActivityClass.setAccessible(true);
+            mActivityClass.set(this, mainActivity);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        Intent i = new Intent();
-        i.setClassName(testPackage, mainActivity.getName());
-        i.putExtras(extras);
+        Intent i = new Intent(Intent.ACTION_MAIN);
+        i.setClassName(testPackage, mainActivityName);
+        i.addCategory("android.intent.category.LAUNCHER");
+        i.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+
+        if (extras != null) {
+            i.putExtras(extras);
+        }
+
         setActivityIntent(i);
-        solo = new SoloEnhanced(getInstrumentation());
-        viewFetcher = new PublicViewFetcher(getInstrumentation(), this.getActivity());
+
         actions = new Actions(getInstrumentation(), this);
         instrumentation = getInstrumentation();
     }
@@ -49,12 +84,70 @@ public class InstrumentationBackend extends ActivityInstrumentationTestCase2<Act
     /**
      * Here to have JUnit3 start the instrumentationBackend
      */
+
     public void testHook() throws Exception {
-        HttpServer httpServer = HttpServer.getInstance();
-        httpServer.setReady();
-        httpServer.waitUntilShutdown();
-        solo.finishOpenedActivities();
-        System.exit(0);
+
+        final AtomicReference<Activity> activityReference = new AtomicReference<Activity>();
+        Thread activityStarter = new Thread() {
+            public void run() {
+                activityReference.set(getActivity());
+            }
+        };
+        activityStarter.start();
+        activityStarter.join(10000);
+
+        Activity activity = null;
+        if (activityReference.get() != null) {
+            activity = activityReference.get();
+            System.out.println("testHook: Activity set to: " + activity);
+        } else {
+            System.out.println("testHook: Activity not set");
+            try {
+
+                Field mQueue = Looper.getMainLooper().getClass().getDeclaredField("mQueue");
+                mQueue.setAccessible(true);
+                MessageQueue messageQueue = (MessageQueue)mQueue.get(Looper.getMainLooper());
+
+                Field f = messageQueue.getClass().getDeclaredField("mIdleHandlers");
+                f.setAccessible(true);
+                List<?> waiters = (List<?>)f.get(messageQueue);
+                for(Object o : waiters) {
+                    Class<?> activityGoingClazz = o.getClass();
+                    if (!activityGoingClazz.getName().equals("android.app.Instrumentation$ActivityGoing")) {
+                        continue;
+                    }
+
+
+                    Field mWaiterField = activityGoingClazz.getDeclaredField("mWaiter");
+                    mWaiterField.setAccessible(true);
+                    Object waiter = mWaiterField.get(o);
+                    Class<?> activityWaiterClazz = waiter.getClass();
+
+                    Field activityField = activityWaiterClazz.getDeclaredField("activity");
+                    activityField.setAccessible(true);
+                    activity = (Activity)activityField.get(waiter);
+
+                    instrumentation.addMonitor(new Instrumentation.ActivityMonitor(activity.getClass().getName(), null, false));
+
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        if (activity != null) {
+            solo = new SoloEnhanced(getInstrumentation(), activity);
+            setActivity(activity);
+
+            viewFetcher = new PublicViewFetcher(solo.getActivityUtils());
+
+            HttpServer httpServer = HttpServer.getInstance();
+            httpServer.setReady();
+            httpServer.waitUntilShutdown();
+            solo.finishOpenedActivities();
+            System.exit(0);
+        } else {
+            throw new RuntimeException("Could not get detect the first Activity");
+        }
     }
 
     @Override

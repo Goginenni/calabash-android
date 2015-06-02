@@ -3,6 +3,11 @@ def calabash_build(app)
   log "#{app} was signed with a certificate with fingerprint #{apk_fingerprint}"
 
   keystores = JavaKeystore.get_keystores
+  if keystores.empty?
+    puts "No keystores found."
+    puts "Please create one or run calabash-android setup to configure calabash-android to use an existing keystore."
+    exit 1
+  end
   keystore = keystores.find { |k| k.fingerprint == apk_fingerprint}
 
   unless keystore
@@ -45,15 +50,15 @@ def calabash_build(app)
         raise "Could not create dummy.apk"
       end
 
-      Zip::ZipFile.new("dummy.apk").extract("AndroidManifest.xml","customAndroidManifest.xml")
-      Zip::ZipFile.open("TestServer.apk") do |zip_file|
+      Zip::File.new("dummy.apk").extract("AndroidManifest.xml","customAndroidManifest.xml")
+      Zip::File.open("TestServer.apk") do |zip_file|
         zip_file.add("AndroidManifest.xml", "customAndroidManifest.xml")
       end
     end
     keystore.sign_apk("#{workspace_dir}/TestServer.apk", test_server_file_name)
     begin
 
-    rescue Exception => e
+    rescue => e
       log e
       raise "Could not sign test server"
     end

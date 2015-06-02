@@ -5,9 +5,9 @@ You need to have Ruby installed. Verify your installation by running ruby -v in 
 
 If you are on Windows you can get Ruby from [RubyInstaller.org](http://rubyinstaller.org/)
 
-You should have the Android SDK installed and the environment variable `ANDROID_HOME` should be pointing to it.
+You should have the Android SDK installed. You can download it from [here](http://developer.android.com/sdk/index.html).  Create an environment variable with the name : `ANDROID_HOME` and its value pointing to the location of the unzipped downloaded SDK.
 
-You also need to have Ant installed and added to your path
+You also need to have Ant installed and added to your path. It can be downloaded from [here](https://ant.apache.org/bindownload.cgi).
 
 ### Installation
 
@@ -20,6 +20,8 @@ Install `calabash-android` by running
 
 Troubleshooting Installation
 ----------------------------
+
+### Mac
 
 If you are on Mac you may see an error like this:
 
@@ -39,3 +41,23 @@ have [Xcode](http://developer.apple.com/xcode/) installed you can
 install them from it's Preferences pane (in the Download tab).
 Otherwise you can download the Command Line Tools for you OS X version
 from the [Apple Developer web site](http://developer.apple.com/downloads/index.action).
+
+### Ubuntu
+
+These instructions assume you'll be using Ruby 1.9.1.
+
+Installing Ruby:
+
+    sudo apt-get install ruby1.9.1
+
+You might need to install the dev package when installing calabash:
+
+    sudo apt-get install ruby1.9.1-dev
+
+If you see something like this while installing calabash:
+
+    cannot load such file -- rspec/expectations (LoadError)
+
+It's because the rspec package isn't installed:
+
+    gem install rspec
